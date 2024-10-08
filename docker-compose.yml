@@ -1,0 +1,69 @@
+version: "3.9"
+
+x-backend: &common
+  image: papermerge/papermerge:3.2
+  environment:
+    PAPERMERGE__SECURITY__TOKEN_EXPIRE_MINUTES: 525600 # 2 years
+    PAPERMERGE__SECURITY__SECRET_KEY: iuhsfafhavjansffdljgajkfn  # top secret
+    PAPERMERGE__AUTH__USERNAME: bdbAdmin
+    PAPERMERGE__AUTH__PASSWORD: bdb@1234#admin%%
+    PAPERMERGE__DATABASE__URL: mysql://coco:kesha@db:3306/cocodb
+    PAPERMERGE__REDIS__URL: redis://redis:6379/0
+    PAPERMERGE__SEARCH__URL: solr://solr:8983/pmg-index
+  volumes:
+    - media_root:/core_app/media
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  web:
+    <<: *common
+    platform: linux/amd64
+    ports:
+     - "12000:80"
+  worker:
+    <<: *common
+    platform: linux/amd64
+    command: worker
+  redis:
+    image: redis:6
+    healthcheck:
+      test: redis-cli --raw incr ping
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+  solr:
+    image: solr:9.3
+    ports:
+     - "8983:8983"
+    volumes:
+      - solr_data:/var/solr
+    command:
+      - solr-precreate
+      - pmg-index
+  db:
+    image: mariadb:11.2
+    volumes:
+      - maria:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: kesha
+      MYSQL_DATABASE: cocodb
+      MYSQL_USER: coco
+      MYSQL_PASSWORD: kesha
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: mariadb-admin ping -h 127.0.0.1 -u $$MYSQL_USER --password=$$MYSQL_PASSWORD
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  maria:
+  solr_data:
+  media_root:
